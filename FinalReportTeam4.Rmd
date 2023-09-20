@@ -1,0 +1,2886 @@
+---
+title: "DATA 606 Group Project - Group 4"
+subtitle: 'Zulihumaer Hailaiti, Maciej Pecak, Ewa Rambally, Zheyu Song, Hao Su'
+output: 
+  pdf_document: default
+  html_notebook: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include = FALSE}
+#knitr::opts_chunk$set(eval = FALSE)
+```
+# 1. Introduction (Author: Ewa Rambally)
+
+Our project for this class was based on a data set that accompanies a
+published article entitled: Body size trends in response to climate and
+urbanization in the widespread North American deer mouse, Peromyscus
+maniculatus. By:Guralnick, R.,Hantak, M., Li, D.,McLean, B., Publication
+date: May 21, 2020 Publisher: Dryad
+<https://doi.org/10.5061/dryad.8w9ghx3j7>
+<Data:https://orcid.org/0000-0001-9469-4741>
+
+## 1.1. Who is Deer Mouse? (Author: Ewa Rambally)
+
+Deer mouse is a cousin of house mouse that is feared by epidemiologist
+and loved by pest-control companies and researchers in all sorts of
+biology fields. They usually weigh 10--24 g, and are 12--22 cm long from
+the tip of their little noses to the end of a slim tail. Their eyes pop
+out of the head surface and they are great at jumping. Unfortunately,
+they carry viruses and bacteria that are dangerous to humans. On the
+other hand, an almost complete omnipresence, adaptation to variety of
+environments, and quick reproduction process make them a perfect object
+of research and the "guinea pigs" of the labs. They are omnivores and
+like to eat insects, berries and nuts and at the same time often become
+a meal of smaller mammals, snake, and birds. A funny fact is that they
+display an OCD-like behavior by building unnecessarily oversized nests,
+especially in the lab environment. This data set comprised of many
+different data files. We considered the largest of them.
+
+File: 13_pema_new_rezone_hblength_rezone_centroids28229obs1902_2017.csv
+
+The data set of interest was collected and compiled and is available
+online with the access to the aforementioned paper. In its large version
+it measures 28,228 rows and 51 columns of both, categorical and
+numerical variables. The variable set includes: Data about mice: decade,
+decade2, source, zone, day, year, season, lifestage, sp (subspecies),
+sex, body_mass, tail_length, total_length, HB.length. Data about the
+environment the mouse lived in: Meteorological data: MAT, MWMT, MCMT,
+TD, MAP, MSP, AHM, SHM, DD_0, DD% DD_18, DD18, NFFD, cFFP, eFFP FFP,
+PAS, EMT, EXT, MAR, Eref, CMD, RH (these are standard abbreviations of
+weather and environmental conditions -- see attachment) Data about the
+environment: long, lat, , pop_1\_km2_log10, pop_4\_km2_log10,
+pop_10km2_log10, ecoregion1, ecoregion2, ecoregion3, zone.longitude,
+zone.latitude.
+
+## 1.2. Data cleaning and wrangling (Author: Ewa Rambally)
+
+Data cleaning and initial preparation was conducted in Python.
+
+<File:Prep_for_kNNLifestage.ipynb>
+
+Many columns were dropped, and the final data set comprises of 18,358
+rows and 35 columns out of which only selected were used for the final
+analysis.
+
+After removing all the unspecified or non-numerical values in numerical
+columns (NaNs), there were only under 3000 observations left. Lots of
+information would have been unused if the data were not filled. For that
+purpose the kNN algorithm was used.
+
+Most of the data were missing in the columns "lifestage" (about 25,000
+missing values) and "body_mass"(about 19,000 missing values). In
+addition, presumable because of the compiling from multiple different
+sources for the period of more than a century, category names were not
+consistent i.e. some subspecies names were spelled in a few different
+ways, the category "ADULT" was represented by "Aduls, adult, ad, AD,
+mature, Mature"etc. The category names were unified for the categorical
+variables that were to be used in this projet, i.e. lifestage or
+species. The values for "lifestage" and "body_weight" were filled using
+the kNN algorithm.
+
+PYTHON CODE: in the attachment. The resulting file:
+N5_18609r_CatUni\_\_NaNinlfst.csv
+
+### 1.2.1. kNN algorithm for categorical column "lifestage" (Author: Ewa Rambally)
+
+Intake file: N5_18609r_CatUni\_\_NaNinlfst.csv
+
+For the purpose of best predictive properties of the kNN algorithm, to
+the categorical variable season, ecoregion1 and sex, assigned numerical
+values. For season and ecoregion1 the choice of numerical value of
+categories was somewhat ordering, to express distance and adjacency or
+its lack between category values in terms of season or physical
+location.
+
+kNN was 90-95% accurate in predicting the ADULT category of the variable
+"lifestage", and 80-83% accurate in overall predictions (used 10-fold
+cross validation). (See: created data frame in the R code).
+
+The resulting data frame is: mice_filled_lifestage_AD_SUBAD_YOUNG.csv.
+
+This data frame was sent to Maciek Pecak for filling further the
+"body_mass" column.
+
+R CODE:
+
+```{r}
+library('ISLR')
+library('ggplot2')
+library("mlbench")
+library("sampling")
+library("MASS")
+library("class") #for the knn() function
+library("dplyr") #for select() function
+library("tidyr")
+library("caret")
+library("base")
+library("lattice")
+library("VGAM")
+library("Rfast")
+```
+
+```{r, eval = F}
+df=read.csv("N5_18609r_CatUni__NaNinlfst.csv")
+
+```
+
+```{r, eval = F}
+unique(df$lifestage)
+```
+
+```{r, eval = F}
+dim(df)
+```
+
+```{r, eval = F}
+#removing remaining nans and "" and "U"
+df=df[!is.na(df$pop_density_4km2),]
+df=df[((df$ecoregion1 != "") & (df$lifestage != "FET") & (df$lifestage != "U")),]
+unique(df$lifestage)
+dim(df)
+```
+
+```{r, eval = F}
+# coding reflect distance from ecoregion to ecoregion
+u_num=c(7,6,6.5,7.5,1,2,4,3,5)#c(9,5,7,8,1,2,5,3,20,6)
+u=unique(df$ecoregion1)
+eco1_coded=data.frame(u,u_num)
+#eco1_coded
+```
+
+```{r, eval = F}
+# reflects distances from season taking into consideration difference in food supply (somewhat)
+s_num=c(1,2,3,4)
+s=unique(df$season)
+seas_coded=data.frame(s,s_num)
+#seas_coded
+```
+
+```{r, eval = F}
+# "numerising needed categorical variables"
+df$ecoregion1_num <- with(
+  df, 
+  ifelse(ecoregion1==eco1_coded$u[1], eco1_coded$u_num[1],
+         ifelse(ecoregion1==eco1_coded$u[2], eco1_coded$u_num[2], 
+                ifelse(ecoregion1==eco1_coded$u[3], eco1_coded$u_num[3], 
+                       ifelse(ecoregion1==eco1_coded$u[4], eco1_coded$u_num[4], 
+                              ifelse(ecoregion1==eco1_coded$u[5], eco1_coded$u_num[5], 
+                                     ifelse(ecoregion1==eco1_coded$u[6], eco1_coded$u_num[6], 
+                                            ifelse(ecoregion1==eco1_coded$u[7], eco1_coded$u_num[7], 
+                                                   ifelse(ecoregion1==eco1_coded$u[8], eco1_coded$u_num[8], 
+                                                          ifelse(ecoregion1==eco1_coded$u[9], eco1_coded$u_num[9], eco1_coded$u_num[10]))))))))))
+```
+
+```{r, eval = F}
+df$season_num <- with(
+  df,
+  ifelse(season==seas_coded$s[1], seas_coded$s_num[1], 
+         ifelse(season==seas_coded$s[2], seas_coded$s_num[2],
+                ifelse(season==seas_coded$s[3], seas_coded$s_num[3], 
+                       ifelse(season==seas_coded$s[4], seas_coded$s_num[4], seas_coded$s_num[5] )))))
+```
+
+```{r, eval = F}
+df$sex_num <- with(df, 
+                   ifelse(sex == "male", 1 ,0))
+```
+
+```{r, eval = F}
+#normalize values in numerical variables
+normalize <- function (x){
+  return ((x-min(x))/(max(x)-min(x)))
+}
+df_select_norm<- as.data.frame(lapply(df_select, normalize))
+```
+
+```{r, eval = F}
+#join with lifestage
+df_select_norm$lifestage = df$lifestage
+```
+
+```{r, eval = F}
+miss=df_select_norm[(df_select_norm$lifestage == ""),]
+compl=df_select_norm[(df_select_norm$lifestage != ""),]
+df_miss=df[df$lifestage == "",]
+df_complete=df[df$lifestage != "",]
+```
+
+```{r, eval = F}
+#CHECKING ACCURACY OF CATEGORY ASSIGNMENT
+#create folds
+set.seed(2023)
+Folds10 <- createFolds(factor(compl$lifestage), k = 10, list=TRUE)
+```
+
+```{r, eval = F}
+accuracy=c(1:10)
+accuracy_AD=c(1:10)
+accuracy_SUBAD=c(1:10)
+accuracy_YOUNG=c(1:10)
+
+find_accuracy <- function(x){sum(diag(x))/(sum(rowSums(x))) * 100}
+
+for (i in 1:10){
+  
+  compl_factors_test=compl[unlist(Folds10[i]),]
+  compl_target_category_test=compl_factors_test$lifestage 
+  compl_factors_test=compl_factors_test[-c(1,11)]
+
+  compl_factors_train=compl[-unlist(Folds10[i]),]
+  compl_target_category=compl_factors_train$lifestage 
+  compl_factors_train=compl_factors_train[-c(1,11)]
+  
+  pred_class <- knn(compl_factors_train,compl_factors_test,cl=compl_target_category,k=10)
+  tab <- table(pred_class, compl_target_category_test)
+  
+  my_matrix <- matrix(tab, ncol=ncol(tab), dimnames=dimnames(tab))
+  accuracy[i] <- find_accuracy(my_matrix)
+  accuracy_AD[i] <- 100*tab[1]/(tab[1]+tab[2]+tab[3])
+  accuracy_SUBAD[i] <- 100*tab[5]/(tab[4]+tab[5]+tab[6])
+  accuracy_YOUNG[i] <- 100*tab[9]/(tab[7]+tab[8]+tab[9])
+}
+
+cv=mean(accuracy)
+mean_accuracy_AD<-mean(accuracy_AD)
+mean_accuracy_SUBAD<-mean(accuracy_SUBAD)
+mean_accuracy_YOUNG<-mean(accuracy_YOUNG)
+
+Accuracy_Rates = data.frame(
+  c('AD+SUBAD+YOUNG', 'AD','SUBAD','YOUNG'), 
+  c(cv,mean_accuracy_AD, mean_accuracy_SUBAD,mean_accuracy_YOUNG)
+) 
+colnames(Accuracy_Rates) = c('Group or Subgroup', 'Accuracy (%)')
+
+Accuracy_Rates
+#END OF CHECKING ACCURACY OF KNN ALGORITHM
+```
+
+```{r, eval = F}
+# APPLYING THE KNN ALGORITHM TO OUR DATA SET TO PERFORM THE FILL OF "lifestage" COLUMN
+missing_factors_test <- miss[-c(1,11)]
+complete_factors_traing <- compl[-c(1,11)]
+complete_target <- compl$lifestage
+missing_fill <-  knn(complete_factors_traing,missing_factors_test,cl=complete_target,k=10)
+```
+
+```{r, eval = F}
+df_miss$lifestage=missing_fill
+final_df_fill_lifestage=rbind(df_complete,df_miss)
+```
+
+```{r, eval = F}
+#exporting filled data frame to .csv
+library(readr)
+write_csv(final_df_fill_lifestage,"mice_filled_lifestage_AD_SUBAD_YOUNG.csv")
+```
+
+Filling of the category "lifestage" was conducted on the data that
+contained the "body_mass" value. (18,609 observations). Afterwards,
+based on these values, the "body_mass" missing values were completed
+with the use of kNN algorithm (k=10)
+
+### 1.2.2. kNN algorithm for numerical column "body_mass" (Author: Maciej Pecak)
+The fill of "body_weight" was achieved also with the use of the kNN
+algorithm for finding 10 nearest neighbours and using bootstrap method
+to find their mean as the substitute for the missing value. The
+cross-validation error was about 40% ever after using the filled
+categories in the "lifestage" variable.
+
+kNN implementation for filling the missing body mass was conducted in
+Python.
+
+File: bodymass_fill.ipynb
+
+---
+
+# 2. Strata or Clusters (Author: Ewa Rambally)
+
+For the purpose of the analysis and to see whether there is variation in
+mice's body characteristics (body mass, head-body length, and tail
+length) over time and in regards to climate, the time range 1929-2017
+(was divided into three periods, "1926-1955", "1956-1985", "1986-2017",
+and the ecoregions level 1 into three climate groups. The column
+"climate_group" was created to clustered environments with similar
+properties ("FOREST" for lower land forests, westcoast forests, "GREAT
+PLAINS" for the central part of the US, and "DESERTS/DRY" for the
+remaining dry parts of the country).
+
+The below code was conducted to determine whether the aforemantioned
+categories of each variable: "period" and "climate groups" were strata
+or clusters with regards to each of the variables" "body_mass",
+"tail_length", and "HB.Lenght" (head and bosy length: all but the tail).
+The code is provided for one of the pairs of the six pairs of data
+(period- tail_length):
+
+-   periods and body_mass
+-   periods and HB.Length
+-   periods and tail length
+-   ecoregions and body_mass
+-   ecoregions and HB.Length
+-   ecoregions and tail length
+
+R CODE:
+
+```{r, include=FALSE}
+library('ISLR')
+library('ggplot2')
+library("mlbench")
+library("sampling")
+library("MASS")
+library("class") #for the knn() function
+library("dplyr") #for select() function
+library("tidyr")
+library("caret")
+library("base")
+library("lattice")
+library("ggpubr")
+library("car")
+library("multcomp")
+```
+
+```{r, eval = F}
+df_aov=read.csv("C:\\Users\\Testing5\\Documents\\EWA\\606\\606PROJECT\\Final_data\\mice_aov.csv")
+```
+
+Null hypothesis: the means of the different groups are the same
+Alternative hypothesis: At least one sample mean is not equal to the
+others.
+
+```{r, eval = F}
+#AoV tail_length vs. ecoregion
+AOV=aov(tail_length~period, data=df_aov)
+summary(AOV)
+```
+
+CONCLUSION: At least one sample mean is not equal to the others.
+
+```{r, eval = F}
+#Visualization
+ggboxplot(df_aov, x="period", y="tail_length", color="period", xlab = "Time Period", ylab="tail_length", title = "                                               tail_length over time")
+
+```
+
+For each pair test Ho: There are no difference in mean tail_length Ha:
+There is difference in mean tail_length
+
+```{r, eval = F}
+#Pairwise tests: Tukey Honest Significant Differences
+TukeyHSD(AOV)
+
+```
+
+```{r, eval = F}
+pairwise.t.test(df_aov$tail_length, df_aov$period,  p.adjust.method = "BH")
+```
+
+Conclusion: There are significant pairwise differences between tail
+length for each pair of the three periods.
+
+Assumptions: 1. Homogeneity of variance (graph, Levene test). Relaxing
+homogeneity assumption - using Welsh one-way test (oneway.test(weight \~
+group, data = my_data)) OR Pairwise t-tests with no assumption of equal
+variances pairwise.t.test(my_data$weight, my_data$group, p.adjust.method
+= "BH", pool.sd = FALSE) 2. Normality plot(bm_period_aov,2) and
+Shapiro-Wilk test
+
+3.  I assumptions are not met we can use Kruskal-Wallis rank sum test
+    kruskal.test(weight \~ group, data = my_data)
+
+ASSUMPTIONS:
+
+1.  HOMOGENEITY of Variance
+
+```{r, eval = F}
+plot((AOV), 1)
+```
+
+H_0: Variances of weights across periods are the same H_a: Varianes of
+weights across periods are different
+
+```{r, eval = F}
+leveneTest(tail_length~period, data=df_aov)
+```
+
+Reject the null hypothesis. Variances for different groups are
+different.
+
+2.  Normality:
+
+```{r, eval = F}
+plot(AOV, 2)
+```
+
+```{r, eval = F}
+# Extract the residuals
+aov_residuals <- residuals(object=AOV )
+# Run Shapiro-Wilk (3-5000 observations) test or Kolmogorov-Smirnoff test
+ks.test(aov_residuals, "pnorm")
+
+```
+
+Tail_length is not normally distributed. Therefore, to check if mean
+body mass of the mice changed over time, we will use the Kruskal test.
+
+```{r, eval = F}
+kruskal.test(tail_length ~ period, data = df_aov)
+```
+
+Conclusion: At least twao means of the tail lengths are no the same.
+
+THEREFORE: Periods of time (as defined earlier) should be treated as
+STRATA for the variable tail_length .
+
+The results of the above analysis and code results are summarized in the
+rable below:
+
+![Figure 2.1 Analysis of the time periods](ss_time.png)
+
+![Figure 2.2 Analysis of the ecoregions](ss_eco.png)
+
+---
+
+# 3. Population estimation (Author: Zulihumaer Halaiti)
+
+## Introduction
+
+Our data set is collected from the research paper that are investigate
+on the environmental and urbanization effects on mice body size. So, our
+interested variable is body index of deer mice, like body mass and total
+length.
+
+By doing sampling, we can have a general idea of population mean of body
+index. We will use body mass and tail length as an example.
+
+Looking through all the variables that can be a candidate for strata or
+cluster, there aren't any variables suitable for cluster sampling. So,
+we will use simple random sampling and stratified sampling to do the
+population estimation and compare which method is better (more precise).
+
+First, we checked if "Species" can be a candidate for strata by using
+several statistical method.
+
+```{r include=FALSE}
+library(survey)
+library(sampling)
+library(dplyr)
+library(ggplot2)
+```
+
+Original dataset
+
+```{r}
+mice <- read.csv("mice_filled_all_values.csv")
+mice <- mice[!mice$sp=='Peromyscus maniculatus',] 
+names(mice)
+dim(mice)
+unique(mice$sp)
+```
+
+The mice species"Peromyscus maniculatus" was removed from data since we
+do not know the composition of this species. The data have 6737 rows and
+33 columns.
+
+### Then we romove the sub species that have sample size less than 100, because the subspecies can not be sampled if its size is small
+
+```{r}
+# Total observation of each sub-species 
+level=unique(mice$sp)
+level
+list <-data.frame(table(mice$sp))
+list
+```
+
+```{r}
+# The sub-species that has less than 100 observation was removed
+df_filtered <- mice %>% 
+  group_by(sp) %>% 
+  filter(n() >= 100) %>% 
+  ungroup()
+```
+
+### Statistical Check if "sp" can be a candidate for stratified sampling to estimate body mass
+
+```{r}
+# Perform ANOVA test
+model <- lm(body_mass ~ sp, data = df_filtered)
+anova_result <- anova(model)
+
+# View the ANOVA table
+anova_result
+```
+
+The p value for ANOVA table is \< 0.05,it suggests that the differences
+between the groups are statistically significant, and that we can reject
+the null hypothesis that there are no differences between the groups.
+
+To further explore which groups differ significantly from each other, so
+we use post-hoc tests to merge groups.
+
+```{r}
+library(agricolae) 
+CRD<-aov(body_mass~sp,data=df_filtered) 
+LS=LSD.test(CRD,trt="sp") 
+LS
+```
+
+From the result above we will recreate new strata by merging the sub
+group that have no significant different means. And we have 5 stratas
+that are "a,b,c,d,e"(groupedspices)
+
+```{r}
+# Assign the new strata to the merged sub-speices
+df_filtered <- df_filtered%>% 
+  mutate(groupedspices = case_when(
+    sp == "Peromyscus maniculatus bairdii" ~ "A",
+    sp == "Peromyscus maniculatus luteus" ~ "B",
+    sp == "Peromyscus maniculatus abietorum" ~ "B",
+    sp == "Peromyscus maniculatus rufinus" ~ "B",
+    sp == "Peromyscus maniculatus artemisiae" ~ "C",
+    sp == "Peromyscus maniculatus Wagner, 1845" ~ "C",
+    sp == "Peromyscus maniculatus rubidus" ~ "D",
+    sp == "Peromyscus maniculatus nebrascensis" ~ "D",
+    sp == "Peromyscus maniculatus sonoriensis" ~ "E",
+    sp == "Peromyscus maniculatus gambelii" ~ "E",
+    TRUE ~ "e"
+  ))
+```
+
+### Decide sample size
+
+```{r}
+dim(df_filtered)
+df_filtered
+```
+
+```{r}
+# The formula is used to decide the sample size 
+z=1.96
+p=0.5
+e=0.05
+samplesieze=ceiling((z^2*p*(1-p)/e^2)/(1+(z^2*p*(1-p)/(e^2*6433))))
+samplesieze
+```
+
+Then we use same sample size to run simple random sampling and
+stratified sampling
+
+## 3.1 Simple random sampling
+
+```{r}
+set.seed(10)
+idx=sample(1:dim(df_filtered)[1],size=363,replace=FALSE)
+mice1=df_filtered[idx,]
+mice1=data.frame(mice1,pw=rep(dim(df_filtered)[1]/363,363),
+                        fpc=rep(dim(df_filtered)[1],363))
+
+svy1<-svydesign(id=~0, strata =NULL, weights=~pw, data = mice1, fpc=~fpc)
+bodymassmean=svymean(~body_mass, svy1)
+bodymassmean
+```
+
+By doing simple random sampling, the estimated population mean of body
+mass is 17.674 and the standard devition is 0.2165.
+
+## 3.2 Stratified sampling use proportional allocation principle
+
+```{r}
+level=unique(df_filtered$groupedspices)
+level
+list <-data.frame(table(df_filtered$groupedspices))
+list
+```
+
+```{r}
+list <- list %>% mutate(size=round(list$Freq/(dim(df_filtered)[1]/363)))
+colnames(list)[1]  <- "groupedspices" 
+list=list[c(2,3,5,1,4),]
+list
+```
+
+```{r}
+# Check if each strata have same probablity
+set.seed(10)
+idx<-sampling:::strata(df_filtered, stratanames=c("groupedspices"), size=
+                         list$size, method="srswor")
+micestrat<-getdata(df_filtered,idx)
+```
+
+```{r}
+micestrat=data.frame(micestrat, pw=1/micestrat$Prob,
+fpc=c(rep(1502,85),rep(810,46),rep(2870,162),rep(245,14),rep(1006,57)))
+svy2<-svydesign(id=~1,strata = ~sp, weights = ~pw, data = micestrat,
+                fpc=~fpc)
+mi2<-svymean(~body_mass, svy2)
+mi2
+```
+
+After running the simple random sampling and stratified sampling we can
+have a conclusion that for estimating body mass, stratified sampling is
+more precise with lower sample error that is 0.2094 while simple random
+sampling has sample error:0.2165.
+
+## 3.3 We can also chek if "ecoregion" can be candidate for strata to estimate tail length
+
+We remove the ecoregions that have observation less than 50, because the
+ecoregions can not be sampled if its size(primary sampling unit) is
+small
+
+```{r}
+level1=unique(mice$ecoregion1)
+level1
+list1 <-data.frame(table(mice$ecoregion1))
+list1
+```
+
+```{r}
+mice1 <- mice %>% 
+  group_by(ecoregion1) %>% 
+  filter(n() >= 50) %>% 
+  ungroup()
+```
+
+### Perform ANOVA test
+
+```{r}
+model <- lm(tail_length ~ ecoregion1, data = mice1)
+anova_result <- anova(model)
+
+# View the ANOVA table
+anova_result
+```
+
+The p value for ANOVA table is \< 0.05,it suggests that the differences
+between the groups are statistically significant, and that we can reject
+the null hypothesis that there are no differences between the groups.
+
+To further explore which groups differ significantly from each
+other,which groups are no different in means. We use post-hoc tests to
+merge groups.
+
+```{r}
+library(agricolae) 
+CRD<-aov(tail_length ~ ecoregion1,data=mice1) 
+LS=LSD.test(CRD,trt="ecoregion1") 
+LS
+```
+
+From the result above we can see all the ecoregion has different mean.
+
+### Decide sample size
+
+```{r}
+dim(mice1)
+```
+
+```{r}
+# The formula is used to decide the sample size 
+z=1.96
+p=0.5
+e=0.05
+samplesieze=ceiling((z^2*p*(1-p)/e^2)/(1+(z^2*p*(1-p)/(e^2*6626))))
+samplesieze
+```
+
+### Then we use same sample size to run simple random sampling and stratified sampling
+
+### Simple random sampling
+
+```{r}
+set.seed(10)
+idx=sample(1:dim(mice1)[1],size=364,replace=FALSE)
+mice2=mice1[idx,]
+mice2=data.frame(mice2,pw=rep(dim(mice1)[1]/364,364),
+                        fpc=rep(dim(mice1)[1],364))
+
+svy1<-svydesign(id=~0, strata =NULL, weights=~pw, data = mice2, fpc=~fpc)
+tailmean=svymean(~tail_length, svy1)
+tailmean
+```
+
+The estimated tail length by using simple random sampling is 67.81 and
+the standard devidation is 0.5424.
+
+### Stratified sampling use proportional allocation principle
+
+```{r}
+level1=unique(mice1$ecoregion1)
+level1
+list1 <-data.frame(table(mice1$ecoregion1))
+list1
+```
+
+```{r}
+list1 <- list1 %>% mutate(size=round(list1$Freq/(dim(mice1)[1]/364)))
+colnames(list1)[1]  <- "ecoregion1" 
+list1=list1[c(1,4,7,5,3,2,6),]
+list1
+```
+
+```{r}
+set.seed(10)
+idx<-sampling:::strata(mice1, stratanames=c("ecoregion1"), size=
+                         list1$size, method="srswor")
+micestrat1<-getdata(mice1,idx)
+```
+
+```{r}
+micestrat1=data.frame(micestrat1, pw=1/micestrat1$Prob,
+fpc=c(rep(357,19),rep(544,29),rep(2152,116),rep(2571,139),rep(151,8),rep(900,49),rep(51,3)))
+svy2<-svydesign(id=~1,strata = ~ecoregion1, weights = ~pw, data = micestrat1,
+                fpc=~fpc)
+mi3<-svymean(~tail_length, svy2)
+mi3
+```
+
+After running the simple random sampling and stratified sampling we can
+have a conclusion that for estimating tail length, stratified sampling
+is more precise with lower sample error 0.4754 while sample error of
+simple random sampling is 0.5424.
+
+------------------------------------------------------------------------
+
+# 4. Regression problems
+
+This section will explore the regression problems - trying to predict
+mice body mass and the total length, based on the other available
+parameters. For each dependent variable there will be a linear
+regression model trained (with normality/homoscedasticity assuptions
+checked) as well as the regression tree.
+
+## 4.1. Body mass - linear regression (Author: Maciej Pecak)
+
+First, let's read the data.
+
+```{r}
+mice.df <- read.csv("mice_filled_all_values.csv") %>%
+  mutate(
+    season = as.factor(season),
+    lifestage = as.factor(lifestage),
+    sex = as.factor(sex),
+    ecoregion1 = as.factor(ecoregion1)
+  )
+head(mice.df, 3)
+```
+
+Only mice subspecies with observation count greater than 100 will be
+considered.
+
+```{r}
+species.considered <- c("Peromyscus maniculatus Wagner, 1845", "Peromyscus maniculatus sonoriensis", "Peromyscus maniculatus bairdii", "Peromyscus maniculatus gambelii", "Peromyscus maniculatus artemisiae", "Peromyscus maniculatus rufinus", "Peromyscus maniculatus rubidus", "Peromyscus maniculatus nebrascensis", "Peromyscus maniculatus luteus")
+
+#remove redundant/unused columns
+model.df <- mice.df %>%
+  select(-c(X.1, X, long, lat, decade, month, year, ecoregion1_num, season_num, sex_num, sex_transformed, ecoregion1_transformed, season_transformed)) %>%
+  filter(sp %in% species.considered)
+
+```
+
+Next, the multicollinearity needs to be eliminated in order to have
+meaningful results.
+
+```{r}
+vif(lm(body_mass ~ 
+         pop_density_4km2 + tail_length + HB.Length + TD + MAP + MSP + FFP + EXT, data = model.df))
+```
+
+```{r}
+model.df3 <- model.df %>%
+  select(-c(MCMT, MAT, DD5, EMT, MWMT, total_length))
+
+vif(lm(body_mass ~ ., data = model.df3))
+```
+
+Next, we create the first-order linear model and eliminate insignificant
+variables based on the p-value of the individual t-test.
+
+```{r}
+base.model <- lm(body_mass ~ ., data = model.df3)
+summary(base.model)
+```
+
+```{r}
+sig.model.df <- model.df3 %>%
+  select(-c(pop_density_4km2, TD, MAP, FFP))
+
+sig.base.model <- lm(body_mass ~ ., sig.model.df)
+summary(sig.base.model)
+```
+
+After that, the interaction model has been trained and only significant
+interaction terms (as well as the base terms) were kept in the model.
+
+```{r}
+int.bm.model <- lm(body_mass ~ (season + lifestage + sp + sex + tail_length + HB.Length + MSP + EXT + ecoregion1) ^ 2
+                   , data = sig.model.df)
+
+#summary(int.bm.model)
+```
+
+```{r}
+int.bm.model <- lm(body_mass ~ season + lifestage + sp + sex + tail_length + HB.Length + MSP + EXT + ecoregion1 +
+                     season * lifestage + season * tail_length + season * HB.Length +
+                     lifestage * sex + lifestage * HB.Length + 
+                     sp * sex + sp * tail_length + sp * MSP + sp * EXT +
+                     sex * HB.Length + sex * MSP + 
+                     tail_length * EXT + tail_length * ecoregion1 + 
+                     HB.Length * MSP 
+                   , data = sig.model.df)
+
+summary(int.bm.model)
+```
+
+Finally, let's plot the useful graphs for the linear regression.
+
+```{r}
+plot(int.bm.model)
+```
+
+Based on the above (graph 1) looks like we might have problem with
+homoscedasticity. Graph 2 also suggests that the might be no normality.
+Graph 4 shows that there are no significant outliers based on Cook's
+distance.
+
+To check homoscedasticity, the Breusch-Pagan test has conducted.
+
+```{r}
+library("lmtest")
+bptest(int.bm.model)
+```
+
+Based on the above p-value, we reject the null hypothesis, which means
+that the is no homoscedasticity.
+
+In order to have comparison with other regression method, the cross
+validation error has been computed.
+
+```{r}
+library("caret")
+set.seed(10)
+no.folds = 10
+folds <- createFolds(model.df$sp, k = no.folds)
+```
+
+```{r, warning=FALSE}
+cv.errors <- numeric(no.folds)
+for(i in 1:no.folds) {
+  train <- model.df[-unlist(folds[i]), ]
+  test <- model.df[unlist(folds[i]), ]
+  
+  bm.cv.regression <- lm(body_mass ~ season + lifestage + sp + sex + tail_length + HB.Length + MSP + EXT + ecoregion1 +
+                     season * lifestage + season * tail_length + season * HB.Length +
+                     lifestage * sex + lifestage * HB.Length + 
+                     sp * sex + sp * tail_length + sp * MSP + sp * EXT +
+                     sex * HB.Length + sex * MSP + 
+                     tail_length * EXT + tail_length * ecoregion1 + 
+                     HB.Length * MSP 
+                   , data = train)
+  
+  predicted.vals <- predict(bm.cv.regression, test)
+  
+  
+  cv.errors[i] <- sqrt(mean((test$body_mass - predicted.vals) ^ 2))
+}
+
+cv.errors
+```
+
+```{r}
+mean(cv.errors)
+```
+
+## 4.2.Total length - linear regression (Author: Maciej Pecak)
+
+First, let's read the data.
+
+```{r}
+mice.df <- read.csv("mice_filled_all_values.csv") %>%
+  mutate(
+    season = as.factor(season),
+    lifestage = as.factor(lifestage),
+    sex = as.factor(sex),
+    ecoregion1 = as.factor(ecoregion1)
+  )
+```
+
+Only mice subspecies with observation count greater than 100 will be
+considered.
+
+```{r}
+species.considered <- c("Peromyscus maniculatus Wagner, 1845", "Peromyscus maniculatus sonoriensis", "Peromyscus maniculatus bairdii", "Peromyscus maniculatus gambelii", "Peromyscus maniculatus artemisiae", "Peromyscus maniculatus rufinus", "Peromyscus maniculatus rubidus", "Peromyscus maniculatus nebrascensis", "Peromyscus maniculatus luteus")
+
+model.df <- mice.df %>%
+  select(-c(X.1, X, long, lat, decade, month, year, ecoregion1_num, season_num, sex_num, sex_transformed, ecoregion1_transformed, season_transformed)) %>%
+  filter(sp %in% species.considered)
+```
+
+Next, the multicollinearity needs to be eliminated in order to have
+meaningful results.
+
+```{r}
+vif(lm(total_length ~ 
+         body_mass + pop_density_4km2 + tail_length + MAP + MSP + FFP + EXT + MCMT, data = model.df))
+```
+
+```{r}
+model.df3 <- model.df %>%
+  select(-c(TD, MAT, DD5, EMT, MWMT))
+
+vif(lm(total_length ~ ., data = model.df3))
+```
+
+Next, we create the first-order linear model and eliminate insignificant
+variables based on the p-value of the individual t-test.
+
+```{r}
+base.model <- lm(total_length ~ ., data = model.df3)
+# summary(base.model)
+```
+
+```{r}
+sig.model.df <- model.df3 %>%
+  select(-c(HB.Length, pop_density_4km2, EXT, FFP))
+
+sig.base.model <- lm(total_length ~ ., sig.model.df)
+# summary(sig.base.model)
+```
+
+After that, the interaction model has been trained and only significant
+interaction terms (as well as the base terms) were kept in the model.
+
+```{r}
+int.len.model <- lm(total_length ~ (season + lifestage + sp + sex + tail_length + MCMT + MAP + MSP + ecoregion1) ^ 2
+                   , data = sig.model.df)
+
+# summary(int.len.model)
+```
+
+```{r}
+int.len.model <- lm(total_length ~ season + lifestage + sp + sex + tail_length + MCMT + MAP + MSP + ecoregion1 +
+                      season * lifestage + season * tail_length + season * MAP + season * MSP + 
+                      lifestage * sex + lifestage * tail_length + lifestage * MAP + lifestage * MSP + 
+                      sp * sex + sp * tail_length + sp * MAP + sp * MSP + 
+                      sex * tail_length + sex * MSP + 
+                      tail_length * MSP + 
+                      MCMT * MAP + MCMT * ecoregion1 + 
+                      MAP * ecoregion1
+                   , data = sig.model.df)
+
+summary(int.len.model)
+```
+
+Finally, let's plot the useful graphs for the linear regression.
+
+```{r}
+plot(int.len.model)
+```
+
+Based on the above (graph 1) looks like we might have problem with
+homoscedasticity. Graph 2 also suggests that the might be no normality.
+Graph 4 shows that there are no significant outliers based on Cook's
+distance.
+
+To check homoscedasticity, the Breusch-Pagan test has conducted.
+
+```{r}
+library("lmtest")
+bptest(int.len.model)
+```
+
+Based on the above p-value, we reject the null hypothesis, which means
+that there is no homoscedasticity.
+
+In order to have comparison with other regression method, the cross
+validation error has been computed.
+
+```{r}
+library("caret")
+set.seed(10)
+no.folds = 5
+folds <- createFolds(model.df$sp, k = no.folds)
+```
+
+```{r, warning=FALSE}
+cv.errors <- numeric(no.folds)
+for(i in 1:no.folds) {
+  train <- model.df[-unlist(folds[i]), ]
+  test <- model.df[unlist(folds[i]), ]
+  
+  len.cv.regression <- lm(total_length ~ season + lifestage + sp + sex + tail_length + MCMT + MAP + MSP + ecoregion1 +
+                      season * lifestage + season * tail_length + season * MAP + season * MSP + 
+                      lifestage * sex + lifestage * tail_length + lifestage * MAP + lifestage * MSP + 
+                      sp * sex + sp * tail_length + sp * MAP + sp * MSP + 
+                      sex * tail_length + sex * MSP + 
+                      tail_length * MSP + 
+                      MCMT * MAP + MCMT * ecoregion1 + 
+                      MAP * ecoregion1
+                   , data = train)
+  
+  predicted.vals <- predict(len.cv.regression, test)
+  
+  
+  cv.errors[i] <- sqrt(sum((test$total_length - predicted.vals) ^ 2))
+}
+
+cv.errors
+```
+
+```{r}
+mean(cv.errors)
+```
+
+## 4.3. Regression tree - body mass (Author: Zheyu Song)
+
+```{r}
+library(tree)
+df<-read.csv("mice_filled_all_values.csv") %>% dplyr::select(-c(sex_transformed,ecoregion1_transformed,season_transformed,sex_num,season_num,ecoregion1_num,long, lat, decade, month, year, X, X.1))
+df <- df[df$sp != "Peromyscus maniculatus", ]
+names(df)
+dim(df)
+# Convert variables to factors
+df$ecoregion1 <- as.factor(df$ecoregion1)
+df$sp <- as.factor(df$sp)
+df$sex <- as.factor(df$sex)
+df$lifestage <- as.factor(df$lifestage)
+df$season <- as.factor(df$season)
+
+
+# Remove redundant or not meaningful levels
+df$ecoregion1 <- droplevels(df$ecoregion1)
+df$sp <- droplevels(df$sp)
+df$sex <- droplevels(df$sex)
+df$lifestage <- droplevels(df$lifestage)
+df$season <- droplevels(df$season)
+```
+
+Columns with irrelevant data were removed. The columns removed included
+"sex_transformed," "ecoregion1_transformed," "season_transformed,"
+"sex_num," "season_num," "ecoregion1_num," "long," "lat," "decade,"
+"month," "year," "X," and "X.1."
+
+All entries with species "Peromyscus maniculatus" were removed from the
+dataset.
+
+The variable types were converted to factors to prepare for modeling.
+The variables that were converted to factors included "ecoregion1,"
+"sp," "sex," "lifestage," and "season."
+
+Redundant or not meaningful levels were removed from the factors using
+the "droplevels" function.
+
+The dataset was split into a training set and a test set using a random
+sample of 75% of the data for training and 25% for testing.
+
+```{r}
+set.seed (10)
+
+
+splitIndex <- sample(1:nrow(df), size = 3/4 * nrow(df))
+train <- df[splitIndex, ]
+test <- df[-splitIndex, ]
+#head(train)
+dim(test)
+dim(train)
+names(test)
+```
+
+## 4.4. Regression Tree Model for Predicting Body Mass (Author: Zheyu Song)
+
+A regression tree was built using the body mass as the target variable
+and the remaining variables as predictors. The tree was built using the
+tree function from the tree library. The model was summarized using the
+summary function, and a plot of the tree was produced using the plot
+function.
+
+```{r}
+tree.mass<-tree(body_mass ~. , data=train)
+summary(tree.mass)
+```
+
+```{r}
+plot(tree.mass)
+text(tree.mass ,pretty =0)
+```
+
+The plot of the tree indicates the variables used in each split and the
+predicted body mass for each terminal node.
+
+The regression tree had a total of 6 terminal nodes and a residual mean
+deviance of 8.428. The variables used in the construction of the tree
+were "lifestage", "total_length", and "HB.Length". The tree had two
+levels of splits, with the first split being based on "lifestage".
+
+For individuals with a lifestage of "SUBAD" or "YOUNG", the tree split
+on "total_length", with individuals with a total length less than 149.5
+having a predicted body mass of 13.40 and individuals with a total
+length greater than 149.5 having a predicted body mass of 15.72. For
+individuals with a lifestage of "AD", the tree split on "HB.Length".
+Individuals with an HB.Length less than 81.75 had a predicted body mass
+of 16.41, while individuals with an HB.Length greater than 81.75 had a
+predicted body mass of 18.36. For individuals with an HB.Length greater
+than 88.5, the tree split on "total_length", with individuals with a
+total length less than 162.5 having a predicted body mass of 19.94 and
+individuals with a total length greater than 162.5 having a predicted
+body mass of 22.00.
+
+### Prediction and Evaluation:
+
+After building the regression tree using the training data, the model
+was used to make predictions on the test data using the predict
+function.
+
+```{r}
+mass.pred<-predict(tree.mass,test)
+plot(mass.pred,test$body_mass)
+abline(0,1)
+```
+
+The predicted values were plotted against the actual body mass values in
+a scatter plot to evaluate the performance of the tree. The plot shows a
+strong positive linear relationship between the predicted and actual
+body mass values, indicating that the model is performing well.
+
+```{r}
+sqrt(mean((mass.pred-test$body_mass)^2)) 
+```
+
+The performance of the tree was evaluated by making predictions on the
+test data and calculating RMSE between the predictions and the actual
+body mass values. The RMSE for the tree was 3.024804, which indicates
+that the tree is a reasonably good model for predicting body mass
+values.
+
+### Pruning
+
+In order to reduce the complexity of the tree, the tree was pruned using
+the prune.tree function. The cross-validation error was plotted against
+the size of the tree to determine the "best" number of terminal nodes.
+
+```{r}
+cv.mass<-cv.tree(tree.mass)
+plot(cv.mass$size,cv.mass$dev,type="b")
+```
+
+Based on this plot, the best number of terminal nodes was found to be 5.
+This means that a tree with 5 terminal nodes had the best balance
+between overfitting and underfitting.
+
+```{r}
+prune.mass=prune.tree(tree.mass,best=5)
+plot(prune.mass)
+text(prune.mass,pretty=0)
+```
+
+The pruned tree was built using three predictor variables: "lifestage",
+"total_length", and "HB.Length". The pruned tree has 5 terminal nodes,
+which indicates that the tree has 5 branches that stop at a final
+prediction. The first split of the tree is based on the "lifestage"
+variable, with two terminal nodes for "SUBAD, YOUNG" and "AD". The
+second split of the tree is based on the "total_length" variable for the
+"SUBAD, YOUNG" terminal node, with one additional terminal node for body
+mass values less than 149.5. The second split of the tree is based on
+the "total_length" variable for the "AD" terminal node, with two
+additional terminal nodes for body mass values greater than or less than
+149.5. The third split of the tree is based on the "HB.Length" variable
+for the "AD" terminal node with body mass values less than or equal to
+18.3.
+
+```{r}
+summary(prune.mass)
+```
+
+```{r}
+mass.ppred<-predict(prune.mass,test)
+plot(mass.ppred,test$body_mass)
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((mass.ppred-test$body_mass)^2)) #RMSE
+```
+
+The performance of the pruned model was evaluated by making predictions
+on the test data and calculating the root mean squared error (RMSE)
+between the predicted values and the actual body mass values. The RMSE
+for the pruned model was 3.090389.
+
+## 4.5. Regression tree - total length (Author: Zheyu Song)
+
+The process for building the regression tree model for body length is
+similar to the one described above for the body mass model. A regression
+tree was built using the body length as the target variable and the
+remaining variables as predictors.
+
+```{r}
+tree.length<-tree(total_length ~. , data=train)
+summary(tree.length)
+```
+
+```{r}
+plot(tree.length)
+text(tree.length ,pretty =0)
+```
+
+The tree consists of 11 terminal nodes and has a residual mean deviance
+of 27.65, which is the average of the squared differences between the
+predicted and actual values. The distribution of residuals ranges from
+-39 to 27.49, with a mean of 0. The first split in the tree is based on
+tail_length, with values less than 71.25 going to the left branch and
+those greater than or equal to 71.25 going to the right branch. The left
+branch further splits based on HB.Length, with values less than 82.5
+going to a terminal node with a mean total length of 129.9 and values
+greater than or equal to 82.5 going to a node with a mean total length
+of 153.3. The right branch splits based on tail_length and HB.Length,
+resulting in three terminal nodes with mean total lengths of 144.0,
+153.5, and 162.2, respectively. The interpretation of this tree suggests
+that tail_length is the most important predictor of total_length,
+followed by HB.Length.
+
+### Prediction and Evaluation:
+
+The model was used to make predictions on the test data using the
+predict function.
+
+```{r}
+length.pred<-predict(tree.length,test)
+plot(length.pred,test$total_length)
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((length.pred-test$total_length)^2)) #RMSE
+
+```
+
+The performance of the model was evaluated using the root mean squared
+error (RMSE) metric, which measures the difference between the predicted
+and actual values of total length. The RMSE for the model on the test
+data was 5.308092, indicating that the model has a moderate level of
+accuracy in predicting total length.
+
+### Pruning
+
+In order to reduce the complexity of the tree, the tree was pruned using
+the prune.tree function. The cross-validation error was plotted against
+the size of the tree to determine the "best" number of terminal nodes.
+
+```{r}
+cv.length<-cv.tree(tree.length)
+plot(cv.length$size,cv.length$dev,type="b")
+```
+
+Based on this plot, the best number of terminal nodes was found to be 7.
+
+```{r}
+prune.length=prune.tree(tree.length,best=7)
+plot(prune.length)
+text(prune.length,pretty=0)
+```
+
+```{r}
+prune.length
+summary(prune.length)
+```
+
+The pruned regression tree for predicting total length based on tail
+length and HB.Length has a root node with 5052 observations. The first
+split is based on tail length, with observations with tail length less
+than 71.25 cm going to the left branch and those with tail length
+greater than or equal to 71.25 cm going to the right branch. In the left
+branch, the second split is based on HB.Length, with observations with
+HB.Length less than 82.5 cm going to the left subtree and those with
+HB.Length greater than or equal to 82.5 cm going to the right subtree.
+In the right branch, the second split is also based on HB.Length, with
+observations with HB.Length less than 84.5 cm going to the left subtree
+and those with HB.Length greater than or equal to 84.5 cm going to the
+right subtree.
+
+The pruned tree has seven terminal nodes, with tail length and HB.Length
+being the only variables used in the tree construction. The residual
+mean deviance is 42.16, indicating that the model explains a significant
+portion of the variance in the total length data.
+
+```{r}
+length.ppred<-predict(prune.length,test)
+plot(length.ppred,test$total_length)
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((length.ppred-test$total_length)^2)) #RMSE
+
+```
+
+The pruned tree was then built and its performance was evaluated using
+the same metrics as the unpruned tree. The MSE for the pruned tree was
+found to be 6.457926.
+
+## 4.6. Regression Tree Models for Predicting Total Length without Length Variables (Author: Zheyu Song)
+
+We have decided to drop the "tail_length" and "HB.Length" variables from
+our dataset for predicting the total length of the deer mouse. Our
+decision is based on the fact that the tree constructed using these
+variables has already shown a strong relationship with the target
+variable. We believe that it is unnecessary to include other length
+measurements of the body for predicting the total length if the
+"tail_length" and "HB.Length" variables can be measured directly.
+Therefore, we have rebuilt a regression tree model to predict the total
+length using a dataset without these two variables.
+
+```{r}
+df1 <- subset(df, select = -c(tail_length, HB.Length))
+set.seed (10)
+splitIndex <- sample(1:nrow(df1), size = 3/4 * nrow(df1))
+train1 <- df1[splitIndex, ]
+test1 <- df1[-splitIndex, ]
+#head(train)
+dim(test1)
+dim(train1)
+names(df1)
+```
+
+```{r}
+tree.length1<-tree(total_length ~. , data=train1)
+
+summary(tree.length1)
+tree.length1
+```
+
+```{r}
+plot(tree.length1)
+text(tree.length1 ,pretty =0)
+```
+
+We rebuilt the regression tree model for predicting total length using
+the deer mouse dataset, train1, without the length variables.
+
+The regression tree model for predicting total length using the deer
+mouse dataset without "tail_length" and "HB.Length" variables produced a
+tree with 8 terminal nodes. The variables used in tree construction were
+"sp," "body_mass," and "EXT."
+
+The regression tree showed that the "body_mass" variable played a
+critical role in determining the total length of the deer mouse.
+Additionally, the "EXT" variable, which measures the ear-to-body length
+ratio, was used in some of the splits. The tree indicates that the deer
+mouse species "Peromyscus maniculatus abietorum," "Peromyscus
+maniculatus artemisiae," "Peromyscus maniculatus gracilis," "Peromyscus
+maniculatus hollisteri," "Peromyscus maniculatus nubiterrae," and
+"Peromyscus maniculatus rubidus" have a higher mean total length
+compared to the other species in the dataset.
+
+```{r}
+length.pred<-predict(tree.length1,test1)
+plot(length.pred,test1$total_length)
+
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((length.pred-test1$total_length)^2)) #the mean squared error
+
+```
+
+The tree's performance was evaluated using the same metrics as the
+previous model, and the root MSE was found to be 9.284538
+
+### Pruning
+
+```{r}
+cv.length1<-cv.tree(tree.length1)
+plot(cv.length1$size,cv.length1$dev,type="b")
+```
+
+```{r}
+prune.length1=prune.tree(tree.length1,best=7)
+plot(prune.length1)
+text(prune.length1,pretty=0)
+```
+
+```{r}
+prune.length1
+```
+
+```{r}
+prune.length1.pred<-predict(prune.length1,test1)
+plot(prune.length1.pred,test1$total_length)
+
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((prune.length1.pred-test1$total_length)^2)) #RMSE
+
+```
+
+We then pruned the tree and found that the pruned tree has a slightly
+higher RMSE of 9.409149. This is higher than the RMSE for the model that
+includes the length variables, indicating that the length variables
+improve the model's ability to predict total length. This may be due to
+the fact that body mass and hind foot length are correlated with total
+length. We concluded that the attempt to remove the length variables was
+not successful, as the resulting model had a much higher RMSE compared
+to the previous model. Therefore, we decided to continue using the
+previous model that included all variables, as it was more effective in
+predicting the total length of deer mice.
+
+## 4.7. Cross-Validation Results for Regression Tree Models on Body Mass and Total Length (Author: Zheyu Song)
+
+In regression analysis, it is important to assess the accuracy of a
+model's predictions before applying it to new data. In this analysis, we
+used k-fold cross-validation to evaluate the performance of regression
+tree models on predicting the body mass and total length of deer mice.
+
+For each model, we split the data into training and validation sets for
+each fold, trained the pruned regression tree model on the training
+data, and evaluated the model on the validation data. We then calculated
+the root mean square error (RMSE) for each fold and averaged the RMSE
+values across all folds to obtain an estimate of the model's
+performance.
+
+### Regression Tree Model for Body Mass
+
+```{r}
+library(caret)
+set.seed (10)
+
+# Specify the number of folds for cross-validation
+k <- 10
+
+# Create a k-fold cross-validation object
+folds <- createFolds(train$body_mass, k = k)
+
+# Initialize a vector to store the performance metrics for each fold
+performance_metrics <- rep(0, k)
+
+# Loop through each fold, training and evaluating the model on each one
+for (i in 1:k) {
+  # Split the training data into training and validation sets for this fold
+  train_indices <- unlist(folds[-i])
+  valid_indices <- folds[[i]]
+  train_data <- train[train_indices, ]
+  valid_data <- train[valid_indices, ]
+  
+  # Train the pruned regressor model on the training data
+  model <- prune.mass
+  
+  # Evaluate the model on the validation data
+  predictions <- predict(model, newdata = valid_data)
+  performance_metric <- sqrt(mean((predictions - valid_data$body_mass)^2))
+  
+  # Store the performance metric for this fold
+  performance_metrics[i] <- performance_metric
+}
+
+# Compute the average performance metric across all folds
+average_performance <- mean(performance_metrics)
+performance_metrics
+average_performance
+```
+
+```{r}
+plot(performance_metrics, type = "o", xlab = "Fold", ylab = "RMSE", main = "Cross-Validation Results for Body Mass Regression Tree Model")
+```
+
+The resulting average performance metric was 2.950394, which indicates
+good predictive accuracy of the model for body mass of deer mice. The
+performance metrics for each fold ranged from 2.785257 to 3.181484,
+which also suggests that the model is consistent in its predictions
+across different folds.
+
+### Regression Tree Model for Predicting Total Length (Author: Zheyu Song)
+
+```{r}
+k <- 10
+set.seed (10)
+
+folds <- createFolds(train$total_length, k = k)
+
+performance_metrics <- rep(0, k)
+
+for (i in 1:k) {
+  train_indices <- unlist(folds[-i])
+  valid_indices <- folds[[i]]
+  train_data <- train[train_indices, ]
+  valid_data <- train[valid_indices, ]
+  
+  model <- prune.length
+  
+  predictions <- predict(model, newdata = valid_data)
+  performance_metric <- sqrt(mean((predictions - valid_data$total_length)^2))
+  
+  performance_metrics[i] <- performance_metric
+}
+
+average_performance <- mean(performance_metrics)
+performance_metrics
+average_performance
+```
+
+```{r}
+plot(performance_metrics, type = "o", xlab = "Fold", ylab = "RMSE", main = "Cross-Validation Results for Total Length Regression Tree Model" ,cex.main = 0.8)
+```
+
+The results for the regression tree model on total length of deer mice
+show that the average performance metric across all folds was 6.48. This
+indicates that the model has a relatively high error in predicting the
+total length of deer mice, as the predicted values are, on average,
+around 6.48 units away from the true values.
+
+The performance metric for each fold ranges from 6.14 to 6.77, which
+suggests that the model's accuracy may vary depending on the subset of
+the data used for training and testing. Overall, it appears that the
+regression tree model for total length may not be as effective as the
+model for body mass, as the average performance metric is higher for
+total length than it is for body mass.
+
+### Regression Tree Models for Predicting Total Length without Length Variables
+
+```{r}
+k <- 10
+set.seed (10)
+
+folds <- createFolds(train1$total_length, k = k)
+
+performance_metrics <- rep(0, k)
+
+for (i in 1:k) {
+  train_indices <- unlist(folds[-i])
+  valid_indices <- folds[[i]]
+  train_data <- train[train_indices, ]
+  valid_data <- train[valid_indices, ]
+  
+  model <- prune.length1
+  
+  predictions <- predict(model, newdata = valid_data)
+  performance_metric <- sqrt(mean((predictions - valid_data$total_length)^2))
+  
+  performance_metrics[i] <- performance_metric
+}
+
+average_performance <- mean(performance_metrics)
+performance_metrics
+average_performance
+```
+
+```{r}
+plot(performance_metrics, type = "o", xlab = "Fold", ylab = "RMSE", main = "Cross-Validation Results for Total Length Regression Tree Model  without Length Variables",cex.main = 0.8)
+```
+
+For the regression tree model for predicting the total length without
+length variables, we see that the average RMSE across all folds is 9.53.
+This is higher than the average RMSE for the model that includes the
+length variables, indicating that the length variables improve the
+model's ability to predict total length. This may be due to the fact
+that body mass and hind foot length are correlated with total length,
+and by including these variables, we provide the model with more
+information about the deer mice that may improve its accuracy.
+
+## 4.8. Comparison of regression methods for predicting body mass and total length. (Author: Maciej Pecak)
+
+-   Body mass - CV error:
+    -   Linear regression - 2.5681 - (assumptions not met)
+    -   Regression tree - 2.9504
+-   Total length - CV error:
+    -   Linear regression - 6.2204 - (assumptions not met)
+    -   Regression tree - 6.48 - (including tail length / HB.Length)
+    -   Regression tree - 9.53 - (without tail length / HB.Length)
+
+As presented above, in both cases cross validation error for linear
+regression model is smaller, however both models don't meet the required
+assumptions expected for residuals (normality/homoscedasticity) which
+means using linear regression for further predictions might not yield
+correct results. In this case, it's probably better to use regression
+tree models, because they don't need to follow any assumptions.
+
+---
+
+# 5. Climate impact on mice body mass and total length. (Authors: Maciej Pecak, Zheyu Song)
+
+This part of the study aimed to investigate the relationship between
+climate and body size in mammals. Understanding the drivers of body size
+variation in mammals is crucial for predicting how they will respond to
+climate change, and for understanding the ecological and evolutionary
+processes that have shaped their diversity.
+
+The study focused on five climate variables: temperature seasonality
+(TD), mean annual precipitation (MAP), mean summer precipitation (MSP),
+frost-free period (FFP), and extreme temperature (EXT). These variables
+were selected because they are known to be important drivers of
+ecological processes and have been shown to affect body size in previous
+studies.
+
+We investigated the impact of climate on body size. We selected the
+relevant climate variables (TD, MAP, MSP, FFP, EXT) for both the body
+mass and total length data frames and used linear regression and
+regression trees to build models.
+
+## 5.1. Linear regression
+
+We read the data first to have the data frame fresh.
+
+```{r}
+mice.df <- read.csv("mice_filled_all_values.csv") %>%
+  mutate(
+    season = as.factor(season),
+    lifestage = as.factor(lifestage),
+    sex = as.factor(sex),
+    ecoregion1 = as.factor(ecoregion1)
+  )
+```
+
+In order to keep the analysis consistent, only mice subspecies that were
+observed more than 100 times were taken into consideration. That also
+helps to reduce dimensionality.
+
+```{r}
+species.considered <- c(
+  "Peromyscus maniculatus Wagner, 1845", 
+  "Peromyscus maniculatus sonoriensis", 
+  "Peromyscus maniculatus bairdii", 
+  "Peromyscus maniculatus gambelii", 
+  "Peromyscus maniculatus artemisiae", 
+  "Peromyscus maniculatus rufinus", 
+  "Peromyscus maniculatus rubidus", 
+  "Peromyscus maniculatus nebrascensis", 
+  "Peromyscus maniculatus luteus"
+)
+
+model.df <- mice.df %>%
+  select(-c(X.1, X, long, lat, decade, month, year, ecoregion1_num,
+            season_num, sex_num, sex_transformed, 
+            ecoregion1_transformed, season_transformed)) %>%
+  filter(sp %in% species.considered)
+
+```
+
+In order to ensure the correctness of the algorithm, the variables that
+are highly multicolinear need to be eliminated. Is was conducted
+manually by eliminating the correlated variables one by one, based on
+the highest value of the Variance Inflation Factor. The following subset
+contains values that are not colinear.
+
+```{r}
+climate.bm.df <- model.df %>%
+  filter(lifestage == "AD") %>%
+  dplyr::select(c(body_mass, MAT, MWMT, MCMT, TD, MAP, MSP, DD5, FFP, EMT, EXT))
+
+vif(lm(body_mass ~ ., data = climate.bm.df))
+```
+
+After eliminating the multicolinear variables:
+
+```{r}
+climate.bm.df <- model.df %>%
+  filter(lifestage == "AD") %>%
+  dplyr::select(c(body_mass, TD, MAP, MSP, FFP, EXT))
+
+vif(lm(body_mass ~ ., data = climate.bm.df))
+```
+
+Similar operation has been conducted with consideration of the
+total_length of the mouse.
+
+```{r}
+climate.len.df <- model.df %>%
+  filter(lifestage == "AD") %>%
+  dplyr::select(c(total_length, MAT, MWMT, MCMT, TD, MAP, MSP, DD5, FFP, EMT, EXT))
+
+vif(lm(total_length ~ ., data = climate.len.df))
+```
+
+```{r}
+climate.len.df <- model.df %>%
+  filter(lifestage == "AD") %>%
+  dplyr::select(c(total_length, TD, MAP, MSP, FFP, EXT))
+
+vif(lm(total_length ~ ., data = climate.len.df))
+```
+
+Finally, the linear model for the total length based on the climate
+variables.
+
+```{r}
+m.len <- lm(total_length ~ ., data = climate.len.df)
+summary(m.len)
+```
+
+To increase the precision, the interaction terms have been added.
+
+```{r}
+m.len <- lm(total_length ~ (TD + MAP + FFP + EXT) ^ 2, data = climate.len.df)
+summary(m.len)
+```
+
+The computed RSME:
+
+```{r}
+sqrt(mean(m.len$residuals ^ 2))
+```
+
+The visualization for the assumption inspection:
+
+```{r, fig.height=3, fig.width=5}
+plot(m.len)
+```
+
+As we can see above by the visual inspection, the normality of residuals
+and the homoscedasticity of them looks correct. There are no significant
+outliers. measured by Cook's distance.
+
+---
+
+Similar approach was taken to predict the body mass.
+
+```{r}
+m.bm <- lm(body_mass ~ ., data = climate.bm.df)
+summary(m.bm)
+```
+
+```{r}
+m.bm <- lm(body_mass ~ (MAP + MSP + FFP + EXT) ^ 2, data = climate.bm.df)
+summary(m.bm)
+```
+
+The computed RSME:
+
+```{r}
+sqrt(mean(m.bm$residuals ^ 2))
+```
+
+The visualization for the assumption inspection:
+
+```{r}
+plot(m.bm)
+```
+
+As we can see above by the visual inspection, the homoscedasticity of
+residuals looks correct, however, looking at the qq-plot, we can see
+that normality is not there. There are no significant outliers measured
+by Cook's distance.\newline
+
+To sum up, it looks like the climate has very little to no impact on the
+body mass and total length of the mice. It should be noted that total
+length is more dependant on the climate ($R^{2}_{adj} = 0.1225$) than
+the body mass ($R^{2}_{adj} = 0.0474$).
+
+## 5.2. Regression tree
+
+```{r}
+df<-read.csv("mice_filled_all_values.csv") %>% dplyr::select(-c(sex_transformed,ecoregion1_transformed,season_transformed,sex_num,season_num,ecoregion1_num,long, lat, decade, month, year, X, X.1))
+df <- df[df$sp != "Peromyscus maniculatus", ]
+
+climate.bm.df<-df %>% filter(lifestage=="AD") %>% dplyr::select(c(body_mass,TD,MAP,MSP,FFP,EXT))
+dim(climate.bm.df)
+set.seed (10)
+
+splitIndex <- sample(1:nrow(climate.bm.df), size = 3/4 * nrow(climate.bm.df))
+train.climate.bm.df <- climate.bm.df[splitIndex, ]
+test.climate.bm.df <- climate.bm.df[-splitIndex, ]
+```
+
+```{r}
+tree.mass.climate<-tree(body_mass ~. , data=train.climate.bm.df)
+
+summary(tree.mass.climate)
+tree.mass.climate
+```
+
+```{r}
+plot(tree.mass.climate)
+text(tree.mass.climate ,pretty =0)
+```
+
+The tree showed that the root node had 3384 observations, with a mean
+body mass of 19.23. The first split was based on MSP, with a threshold
+of 113.5. The left branch had 1269 observations with a mean body mass of
+18.48, while the right branch had 2115 observations with a mean body
+mass of 19.68. The second split was based on EXT, with a threshold of
+55.85. The left branch had 1989 observations with a mean body mass of
+19.54, and it was further split based on EXT, with a threshold of 36.45.
+This left branch had 521 observations with a mean body mass of 20.58.
+The right branch had 1468 observations with a mean body mass of 19.17,
+and it was also further split based on EXT, but no further improvement
+in the model was obtained. The right branch of the second split had 126
+observations with a mean body mass of 21.84.
+
+```{r}
+mass.climate.pred<-predict(tree.mass.climate,test.climate.bm.df)
+plot(mass.climate.pred,test.climate.bm.df$body_mass)
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((mass.climate.pred-test.climate.bm.df$body_mass)^2)) #RMSE
+
+```
+
+The model showed that MSP and EXT were the only variables used in the
+tree construction, and the number of terminal nodes was four. The
+residual mean deviance was 13.05, and the RMSE is 3.7743 indicating a
+good fit of the model to the data.
+
+```{r}
+cv.mass<-cv.tree(tree.mass.climate)
+plot(cv.mass$size,cv.mass$dev,type="b")
+```
+
+The plot of cross-validation error versus tree size for the body mass
+climate model shows no clear indication for pruning. The plot suggests
+that the tree is not too complex and has not overfit the training data,
+and therefore pruning may not be necessary.
+
+```{r}
+climate.len.df<-df %>% filter(lifestage=="AD") %>% dplyr::select(c(total_length, TD, MAP, MSP, FFP, EXT))
+dim(climate.len.df)
+set.seed (10)
+
+
+splitIndex <- sample(1:nrow(climate.len.df), size = 3/4 * nrow(climate.len.df))
+train.climate.len.df <- climate.len.df[splitIndex, ]
+test.climate.len.df <- climate.len.df[-splitIndex, ]
+```
+
+```{r}
+tree.len.climate<-tree(total_length ~. , data=train.climate.len.df)
+
+summary(tree.len.climate)
+tree.len.climate
+```
+
+For the regression tree for total length, the variables used in the tree
+construction are MAP, EXT, MSP, and TD. The tree has 8 terminal nodes
+and a residual mean deviance of 125.6, which is the sum of squared
+deviations of the observed values from the predicted values. The
+distribution of residuals ranges from -49.8 to 42.84.
+
+```{r}
+plot(tree.len.climate)
+text(tree.len.climate ,pretty =0)
+```
+
+The first split of the tree is based on MAP, where observations with a
+MAP less than 1454.5 fall into node 2 and those with a MAP greater than
+or equal to 1454.5 fall into node 3. Node 2 is further split based on
+EXT, with observations with an EXT less than 46.65 falling into node 4
+and those with an EXT greater than or equal to 46.65 falling into node
+5. Node 4 is then split based on MSP, with observations with an MSP less
+than 449.5 falling into node 8, and those with an MSP greater than or
+equal to 449.5 falling into node 9. In node 8, observations with an EXT
+less than 38.65 fall into node 16, and those with an EXT greater than or
+equal to 38.65 fall into node 17. In node 9, observations fall into a
+single terminal node (node 9) based on the MSP split.
+
+Node 5 is further split based on EXT, with observations with an EXT less
+than 56.65 falling into node 10, and those with an EXT greater than or
+equal to 56.65 falling into node 11. Node 3 is split based on TD, with
+observations with a TD less than 17.75 falling into node 6, and those
+with a TD greater than or equal to 17.75 falling into node 7. In node 6,
+observations with an MSP less than 102 fall into node 12, and those with
+an MSP greater than or equal to 102 fall into node 13. Node 7 is a
+single terminal node.
+
+```{r}
+len.climate.pred<-predict(tree.len.climate,test.climate.len.df)
+plot(len.climate.pred,test.climate.len.df$total_length)
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((len.climate.pred-test.climate.len.df$total_length)^2)) #RMSE
+
+```
+
+The root mean squared error (RMSE) for the regression tree on predicting
+total length using climate variables is 11.35301. A root mean squared
+error (RMSE) of 11.35301 indicates that the model has relatively high
+error in predicting total fish length based on the given climate
+variables.
+
+```{r}
+cv.mass<-cv.tree(tree.len.climate)
+plot(cv.mass$size,cv.mass$dev,type="b")
+```
+
+```{r}
+prune.length.climate=prune.tree(tree.len.climate,best=6)
+plot(prune.length.climate)
+text(prune.length.climate,pretty=0)
+```
+
+```{r}
+prune.length.climate
+```
+
+```{r}
+prune.len.climate.pred<-predict(prune.length.climate,test.climate.len.df)
+plot(prune.len.climate.pred,test.climate.len.df$total_length)
+abline(0,1)
+```
+
+```{r}
+sqrt(mean((prune.len.climate.pred-test.climate.len.df$total_length)^2)) #RMSE
+```
+
+### Regression Tree for Body Mass on Climate Data
+
+```{r}
+set.seed (10)
+
+df<-read.csv("mice_filled_all_values.csv") %>% dplyr::select(-c(sex_transformed,ecoregion1_transformed,season_transformed,sex_num,season_num,ecoregion1_num,long, lat, decade, month, year, X, X.1))
+df <- df[df$sp != "Peromyscus maniculatus", ]
+
+climate.bm.df<-df %>% filter(lifestage=="AD") %>% dplyr::select(c(body_mass,TD,MAP,MSP,FFP,EXT))
+dim(climate.bm.df)
+set.seed (10)
+
+splitIndex <- sample(1:nrow(climate.bm.df), size = 3/4 * nrow(climate.bm.df))
+train.climate.bm.df <- climate.bm.df[splitIndex, ]
+test.climate.bm.df <- climate.bm.df[-splitIndex, ]
+
+# Specify the number of folds for cross-validation
+k <- 10
+
+folds <- createFolds(train.climate.bm.df$body_mass, k = k)
+
+performance_metrics <- rep(0, k)
+
+for (i in 1:k) {
+  train_indices <- unlist(folds[-i])
+  valid_indices <- folds[[i]]
+  train_data <- train[train_indices, ]
+  valid_data <- train[valid_indices, ]
+  
+  model <- tree.mass.climate
+  
+  predictions <- predict(model, newdata = valid_data)
+  performance_metric <- sqrt(mean((predictions - valid_data$body_mass)^2))
+  
+  performance_metrics[i] <- performance_metric
+}
+
+average_performance <- mean(performance_metrics)
+performance_metrics
+average_performance
+```
+
+```{r}
+plot(performance_metrics, type = "o", xlab = "Fold", ylab = "RMSE", main = "Cross-Validation Results for Body Mass Regression Tree Model on Climate Data",cex.main = 0.8)
+```
+
+We also conducted cross-validation for the regression tree model for
+body mass on the climate data. The results showed an average RMSE of
+4.41, which is higher than the RMSE for the model on the original data.
+
+
+The plot of the cross-validation error as a function of the tree size
+suggests that the optimal tree size is 6. Pruning the tree to this size
+results in the same tree as the unpruned tree. The RMSE of the pruned
+tree is 11.4887
+
+In conclusion, the regression tree analysis conducted on the climate
+data to predict body mass and total length resulted in trees with 4 and
+8 terminal nodes, respectively. The tree for body mass was pruned to 4
+nodes, while the tree for total length was pruned to 6 nodes. The RMSE
+for the body mass prediction was 3.774306, indicating good predictive
+accuracy. However, the RMSE for total length prediction was 11.353,
+indicating relatively poor predictive accuracy. Therefore, while the
+regression tree model was effective in predicting body mass, it may not
+be the best model for predicting total length on the climate data.
+
+## 5.3. Regression Tree for Predicting Total Length on Climate Data
+
+```{r}
+k <- 10
+set.seed (10)
+
+folds <- createFolds(train.climate.len.df$total_length, k = k)
+
+performance_metrics <- rep(0, k)
+
+for (i in 1:k) {
+  train_indices <- unlist(folds[-i])
+  valid_indices <- folds[[i]]
+  train_data <- train[train_indices, ]
+  valid_data <- train[valid_indices, ]
+  
+  model <- prune.length.climate
+  
+  predictions <- predict(model, newdata = valid_data)
+  performance_metric <- sqrt(mean((predictions - valid_data$total_length)^2))
+  
+  performance_metrics[i] <- performance_metric
+}
+
+average_performance <- mean(performance_metrics)
+performance_metrics
+average_performance
+```
+
+```{r}
+plot(performance_metrics, type = "o", xlab = "Fold", ylab = "RMSE", main = "Cross-Validation Results for Total Length Regression Tree Model on Climate Data"   ,cex.main = 0.8)
+```
+
+The regression tree model for predicting total length on climate data
+had an average performance metric of 13.93 across the 10 folds of
+cross-validation. This suggests that the model had a relatively high
+degree of error in its predictions of total length based on the climate
+data. It is important to note that this model did not include any length
+variables as predictors, only climate data. Therefore, it may be useful
+to compare the performance of this model to those including length
+variables as predictors.
+
+## 5.5 Summary of the regression problems
+
+This part of analysis presents the use of regression tree models to
+predict the body mass and total length of deer mice. The regression tree
+model for predicting body mass was based on the variables lifestage,
+total_length, and HB.Length. The 10-fold cross-validation average RMSE
+was 2.95 for the basic dataset and 4.41 for the basic dataset with
+climate data. This suggests that the basic dataset is the optimal choice
+for predicting deer mouse body mass, and that the inclusion of climate
+data has resulted in decreased performance.
+
+The regression tree model for predicting total length was based on the
+variables tail_length and HB.Length. The 10-fold cross-validation
+average RMSE was 6.48 for the basic dataset and 13.93 for the basic
+dataset with climate data, and 9.53 for the basic dataset without body
+length and tail length variables. This indicates that the basic dataset
+is the optimal choice for predicting deer mouse total length, and that
+the inclusion of climate data significantly impacts model performance,
+while ignoring body length and tail length variables also results in
+decreased performance.
+
+In the regression tree models predicting the body mass and total length
+of deer mice used in this analysis, HB.Length was frequently included in
+the models as important predictor variables. This suggests this
+variables plays a significant role in determining the body mass and
+total length of deer mice.
+
+In conclusion, this part of the analysis demonstrates the use of
+regression tree models to predict deer mouse body mass and total length,
+and emphasizes the impact of selecting appropriate variables and
+datasets on model performance. Despite slightly worse performance
+compared to linear regression models, it's advisable to use regression
+trees because they are not dependent on any underlying assumptions.
+
+---
+
+# 6. Classification of the species.
+
+The purpose of this part of analysis is to test out different
+classification methods and determine which gives best results. The
+categorical variable that will be used for the purpose of the
+classification are the subspecies of deer mice.
+
+## 6.1 LDA & QDA (Author: Hao Su)
+
+We loaded the data LDA and QDA and removed the variables with
+multicollinearity as well as time columns. On top of that, the
+observation marked as "Peromyscus maniculatus" was removed, because this
+specie is data that cannot be determined for specific sub-species, it
+affects the classification of sub-species.
+
+```{r}
+library(dplyr)
+df<-read.csv("mice_filled_all_values.csv")%>%dplyr::select(-c(sex_transformed,ecoregion1_transformed,season_transformed,sex_num,season_num,ecoregion1_num))
+
+df <- df %>%dplyr::select(-c(HB.Length, MAT, MWMT, MCMT, TD, DD5,X.1,X,long,lat,decade,month,year))
+
+df <- df[df$sp != "Peromyscus maniculatus", ]
+head(df)
+```
+
+When we did the QDA model, we found there are some species with very few
+observations, and QDA cannot deal with it, so for the same prediction
+comparison, we only kept subspecies with the observation count greater
+than 100. And the species "Peromyscus maniculatus abietorum" has some
+defects that make the model unworkable, so we delete it as well.
+
+```{r}
+sp_count <- table(df$sp)
+
+df <- df[df$sp %in% names(sp_count)[sp_count > 100], ]
+
+df <- df[df$sp != "Peromyscus maniculatus abietorum", ]
+table(df$sp)
+```
+
+And just keep the numeric variables, because LDA can only work well with
+numeric variables.
+
+```{r}
+df2=df[,c("pop_density_4km2","sp","body_mass","tail_length","total_length","MAP","MSP","FFP","EMT")]
+```
+
+A training set (75%) and a test set (25%) were set up to verify the
+accuracy of the models and to determine which model is more accurate.
+
+```{r}
+set.seed (2023)
+idx=sample(1:nrow(df2),3/4*nrow(df2))
+train=df2[idx,]
+test=df2[-idx,]
+```
+
+Create LDA model by using all remaining columns.
+
+```{r}
+library(MASS)
+lda.fit<-lda(sp~., data = train)
+lda.fit
+```
+
+Tried to draw the image of LDA, but it was so messy that we couldn't see
+any information.
+
+```{r}
+plot(lda.fit)
+```
+
+Calculate the missclassfication rate.
+
+```{r}
+class.pred<-predict(lda.fit,test)
+t <- table(class.pred$class,test$sp)
+
+missclassfication <-(sum(class.pred$class !=test$sp))/dim(test)[1]
+missclassfication 
+```
+
+Use the 10-folds cross-validation to get the average accuracy.
+
+```{r}
+library(caret)
+```
+
+```{r}
+model_fit1<-train(sp~., data=df2, trControl = trainControl(method = "cv", number=10), method='lda')
+model_fit1$results[2]
+```
+
+The accuracy in LDA model is 0.7118714.
+
+------------------------------------------------------------------------
+
+Create QDA model by using all remaining columns.
+
+```{r}
+qda.fit<-qda(sp~., data = train)
+qda.fit
+```
+
+Calculate the missclassfication rate.
+
+```{r}
+class.pred<-predict(qda.fit,test)
+t <- table(class.pred$class,test$sp)
+rownames(t) <- NULL
+colnames(t) <- NULL
+
+t
+missclassfication <-(sum(class.pred$class !=test$sp))/dim(test)[1]
+missclassfication 
+```
+
+Use the 10-folds cross-validation to get the average accuracy.
+
+```{r}
+model_fit2<-train(sp~., data=df2, trControl = trainControl(method = "cv", number=10), method='qda')
+model_fit2$results[2]
+```
+
+The accuracy in LDA model is 0.7099238 which is less than 0.7118714 in
+LDA model.
+
+### Test of Multivariate Normality of LDA and QDA
+
+$$
+\begin{aligned}
+H_0:&\mbox{ The data follow normal distribution}\\
+H_a~:&\mbox{ The data do NOT follow normal distribution} \\
+\end{aligned}
+$$
+
+See what species we have. And do the test one by one.
+
+```{r}
+names <-unique(df2$sp)
+names
+```
+
+```{r}
+library(energy)
+tmp.df<-df2 %>% filter(sp == "Peromyscus maniculatus luteus") %>% dplyr::select(-sp)
+#tmp.df
+mvnorm.etest(tmp.df, R=100)
+```
+
+From the energy normality results above, we can see all the numerical
+predictors has the P-value less than 0.05, indicating the Normality
+assumption are not met.
+
+### Test of the Equality Variance
+
+$$
+\begin{aligned}
+H_0:&\mbox{ the data have equal variance}\\
+H_a~:&\mbox{ the data do NOT have equal variance} \\
+\end{aligned}
+$$ See what columns we have. And do the test one by one.
+
+```{r}
+names(df2)
+```
+
+```{r}
+library(car)
+leveneTest(EMT~factor(sp) , data = df2)
+```
+
+From the Levene's test results above, we can see all the numerical
+predictors has the P-value less than 0.05, indicating the equality of
+variance assumption are not met.
+
+However, even if the assumptions are not met, our LDA and QDA model have
+been evaluated by cross-validation with k=10, and all the 10 folds have
+accuracy at around 70%, indicating our LDA and QDA model is stable and
+with good performance.
+
+------------------------------------------------------------------------
+
+## 6.2. Tree classification (Author: Hao Su)
+
+In the classification tree part, we only removed the useless columns,
+time related columns and the "Peromyscus maniculatus" and "Peromyscus
+maniculatus abietorum" species. And also for the same comparision, we
+chose the total number of specie greater than 100.
+
+```{r}
+library(dplyr)
+df<-read.csv("mice_filled_all_values.csv")%>%dplyr::select(-c(sex_transformed,ecoregion1_transformed,season_transformed,sex_num,season_num,ecoregion1_num))
+
+df <- df %>%dplyr::select(-c(X.1,X,long,lat,decade,month,year))
+df <- df[df$sp != "Peromyscus maniculatus", ]
+#head(df)
+
+sp_count <- table(df$sp)
+
+df <- df[df$sp %in% names(sp_count)[sp_count > 100], ]
+
+df <- df[df$sp != "Peromyscus maniculatus abietorum", ]
+table(df$sp)
+```
+
+In this step, the categorical variable "ecoregion1" in the data was
+transformed into a new variable with initials. The original "ecoregion1"
+had nine unique values, each representing a different type of ecoregion.
+To simplify the data and make it easier to analyze, each of these values
+was transformed into a set of initials. For example, "EASTERN TEMPERATE
+FORESTS" was transformed into "ETF". This transformation allowed for
+easier manipulation and analysis of the data, as well as reducing the
+complexity of the model. By transforming the categorical variable into a
+new variable with initials, the data became more streamlined and
+manageable for further analysis.
+
+```{r}
+unique(df$ecoregion1)
+df$ecoregion1 <- gsub("EASTERN TEMPERATE FORESTS", "ETF", df$ecoregion1)
+df$ecoregion1 <- gsub("MEDITERRANEAN CALIFORNIA", "MC", df$ecoregion1)
+df$ecoregion1 <- gsub("NORTHWESTERN FORESTED MOUNTAINS", "NWFM", df$ecoregion1)
+df$ecoregion1 <- gsub("NORTH AMERICAN DESERTS", "NAD", df$ecoregion1)
+df$ecoregion1 <- gsub("MARINE WEST COAST FOREST", "MWCF", df$ecoregion1)
+df$ecoregion1 <- gsub("GREAT PLAINS", "GP", df$ecoregion1)
+df$ecoregion1 <- gsub("SOUTHERN SEMIARID HIGHLANDS", "SSH", df$ecoregion1)
+df$ecoregion1 <- gsub("NORTHERN FORESTS", "NF", df$ecoregion1)
+df$ecoregion1 <- gsub("TEMPERATE SIERRAS", "TS", df$ecoregion1)
+unique(df$ecoregion1)
+
+```
+
+Resolved errors, reduced misclassification rate
+
+```{r}
+dim(df)
+# Convert variables to factors
+df$ecoregion1 <- as.factor(df$ecoregion1)
+df$sp <- as.factor(df$sp)
+df$sex <- as.factor(df$sex)
+df$lifestage <- as.factor(df$lifestage)
+df$season <- as.factor(df$season)
+
+# Check levels of the factors
+levels(df$ecoregion1)
+levels(df$sp)
+levels(df$sex)
+levels(df$lifestage)
+levels(df$season)
+
+# Remove redundant or not meaningful levels
+df$ecoregion1 <- droplevels(df$ecoregion1)
+df$sp <- droplevels(df$sp)
+df$sex <- droplevels(df$sex)
+df$lifestage <- droplevels(df$lifestage)
+df$season <- droplevels(df$season)
+dim(df)
+```
+
+A training set (75%) and a test set (25%) were set up to verify the
+accuracy of the models and to determine which model is more accurate.
+
+```{r}
+set.seed (10)
+idx=sample(1:nrow(df),3/4*nrow(df))
+train=df[idx,]
+test=df[-idx,]
+```
+
+Set the 10-folds cross-validation set.
+
+```{r}
+library(caret)
+library(MASS)
+set.seed(10)
+folds<-createFolds(df$sp, k=10)
+```
+
+```{r}
+library(tree)
+
+tree.class<-tree(factor(sp)~., train)
+summary(tree.class)
+```
+
+```{r}
+tree.class
+```
+
+```{r}
+plot(tree.class)
+text(tree.class, pretty=0,srt=35,cex=0.5)
+```
+
+Calculate the misclassification rate
+
+```{r}
+# Make predictions on the test dataset using the pruned decision tree
+tree.pred <- predict(tree.class, test, type = "class")
+
+t=table(tree.pred,test$sp)
+rownames(t) <- NULL
+colnames(t) <- NULL
+t
+
+# Re-level the predicted values to match the factor levels of the actual values
+prune.pred_factor <- factor(tree.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(prune.pred_factor != test$sp)
+
+# Print the misclassification rate
+cat("Misclassification rate:", misclassification, "\n")
+
+```
+
+Prune the tree to prevent the over fitting.
+
+```{r}
+set.seed(10)
+cv.class<-cv.tree(tree.class, FUN = prune.misclass, K=10) 
+plot(cv.class$size, cv.class$dev,type="b")
+```
+
+We chose the best tree with 16 terminal nodes.
+
+```{r}
+prune.class=prune.tree(tree.class,best=16)
+plot(prune.class)
+text(prune.class,pretty=0,srt=45,cex=0.5)
+```
+
+Calculate the misclassification rate.
+
+```{r}
+prune.pred <- predict(prune.class, test, type = "class")
+t=table(prune.pred,test$sp)
+rownames(t) <- NULL
+colnames(t) <- NULL
+t
+
+# Re-level the predicted values to match the factor levels of the actual values
+prune.pred_factor <- factor(prune.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(prune.pred_factor != test$sp)
+
+# Print the misclassification rate
+cat("Misclassification rate:", misclassification, "\n")
+```
+
+Use 10-folds cross-validation to to get the average accuracy.
+
+```{r}
+misclass_tree<-function(idx){
+train=df[-idx,]
+test=df[idx,]
+tree.class<-tree(factor(sp)~., train)
+prune.class=prune.tree(tree.class,best=16)
+prune.pred <- predict(prune.class, test, type = "class")
+
+# Re-level the predicted values to match the factor levels of the actual values
+prune.pred_factor <- factor(prune.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(prune.pred_factor != test$sp)
+
+return(misclassification)
+}
+mis_tree<-lapply(folds,misclass_tree)
+print(1-mean(as.numeric(mis_tree)))
+```
+
+The accuracy in classification tree model is 0.7991918.
+
+### Sex differentiation 
+
+We tried to predict sex, but the results of this tree show that there is
+no value in doing this.
+
+```{r}
+tree.class<-tree(factor(sex)~., train)
+summary(tree.class)
+```
+
+```{r}
+tree.class
+```
+
+```{r}
+plot(tree.class)
+text(tree.class, pretty=0)
+```
+
+```{r}
+tree.pred<-predict(tree.class,test,type = "class")
+table(tree.pred,test$sex)
+missclassfication <-(sum(tree.pred !=test$sex))/dim(test)[1]
+missclassfication 
+```
+
+```{r}
+set.seed(10)
+cv.class<-cv.tree(tree.class, FUN = prune.misclass, K=10) 
+plot(cv.class$size, cv.class$dev,type="b")
+```
+
+We divided the whole data into two parts, one is male and the other is
+female. And also created trees for these two sub data to compare which
+sex of the species can be predicted better. \## sp-male
+
+```{r}
+male <- subset(df, sex == "male")
+set.seed(10)
+idx=sample(1:nrow(male),3/4*nrow(male))
+train=male[idx,]
+test=male[-idx,]
+train$sp <- factor(train$sp)
+test$sp <- factor(test$sp)
+sapply(train, class)
+sapply(test, class)
+
+```
+
+```{r}
+tree.class<-tree(factor(sp)~., train)
+summary(tree.class)
+```
+
+```{r}
+plot(tree.class)
+text(tree.class,pretty=0,srt=45,cex=0.5)
+
+```
+
+```{r}
+
+# Make predictions on the test dataset
+tree.pred <- predict(tree.class, newdata = test, type = "class")
+t=table(tree.pred,test$sp)
+rownames(t) <- NULL
+colnames(t) <- NULL
+t
+
+# Convert the predicted values to a factor variable that matches the factor levels in the actual values
+tree.pred_factor <- factor(tree.pred, levels = levels(test$sp))
+
+# Check the length of the predicted values and the actual values
+#cat("Length of predicted values:", length(tree.pred_factor), "\n")
+#cat("Length of actual values:", length(test$sp), "\n")
+
+# Calculate the misclassification rate
+misclassification <- mean(tree.pred_factor != test$sp)
+
+# Print the misclassification rate
+cat("Misclassification rate:", misclassification, "\n")
+
+```
+
+```{r}
+set.seed(10)
+cv.class<-cv.tree(tree.class, FUN = prune.misclass, K=10) 
+plot(cv.class$size, cv.class$dev,type="b")
+```
+
+```{r}
+prune.class=prune.tree(tree.class,best=17)
+plot(prune.class)
+text(prune.class,pretty=0,srt=45,cex=0.5)
+```
+
+```{r}
+# Make predictions on the test dataset using the pruned decision tree
+prune.pred <- predict(prune.class, test, type = "class")
+t=table(prune.pred,test$sp)
+rownames(t) <- NULL
+colnames(t) <- NULL
+t
+
+# Re-level the predicted values to match the factor levels of the actual values
+prune.pred_factor <- factor(prune.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(prune.pred_factor != test$sp)
+
+# Print the misclassification rate
+cat("Misclassification rate:", misclassification, "\n")
+
+```
+
+```{r}
+misclass_tree<-function(idx){
+train=df[-idx,]
+test=df[idx,]
+tree.class<-tree(factor(sp)~., train)
+prune.class=prune.tree(tree.class,best=17)
+prune.pred <- predict(prune.class, test, type = "class")
+
+# Re-level the predicted values to match the factor levels of the actual values
+prune.pred_factor <- factor(prune.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(prune.pred_factor != test$sp)
+
+return(misclassification)
+}
+mis_tree<-lapply(folds,misclass_tree)
+print(1-mean(as.numeric(mis_tree)))
+```
+
+The accuracy for sp-male is 0.8073291.
+
+#### sp-female
+
+```{r}
+male <- subset(df, sex == "female")
+set.seed(10)
+idx=sample(1:nrow(male),3/4*nrow(male))
+train=male[idx,]
+test=male[-idx,]
+```
+
+```{r}
+tree.class<-tree(factor(sp)~., train)
+summary(tree.class)
+```
+
+```{r}
+plot(tree.class)
+text(tree.class,pretty=0,srt=45,cex=0.5)
+```
+
+```{r}
+
+
+
+# Make predictions on the test dataset using the pruned decision tree
+tree.pred <- predict(tree.class, test, type = "class")
+t=table(tree.pred,test$sp)
+rownames(t) <- NULL
+colnames(t) <- NULL
+t
+
+
+# Re-level the predicted values to match the factor levels of the actual values
+tree.pred_factor <- factor(tree.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(tree.pred_factor != test$sp)
+
+# Print the misclassification rate
+cat("Misclassification rate:", misclassification, "\n")
+```
+
+```{r}
+set.seed(10)
+cv.class<-cv.tree(tree.class, FUN = prune.misclass, K=10) 
+plot(cv.class$size, cv.class$dev,type="b")
+```
+
+```{r}
+prune.class=prune.tree(tree.class,best=14)
+plot(prune.class)
+text(tree.class,pretty=0,srt=45,cex=0.5)
+```
+
+```{r}
+
+# Make predictions on the test dataset using the pruned decision tree
+prune.pred <- predict(prune.class, test, type = "class")
+t=table(prune.pred,test$sp)
+rownames(t) <- NULL
+colnames(t) <- NULL
+t
+
+
+# Re-level the predicted values to match the factor levels of the actual values
+prune.pred_factor <- factor(prune.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(prune.pred_factor != test$sp)
+
+# Print the misclassification rate
+cat("Misclassification rate:", misclassification, "\n")
+
+```
+
+```{r}
+misclass_tree<-function(idx){
+train=df[-idx,]
+test=df[idx,]
+tree.class<-tree(factor(sp)~., train)
+prune.class=prune.tree(tree.class,best=14)
+prune.pred <- predict(prune.class, test, type = "class")
+
+# Re-level the predicted values to match the factor levels of the actual values
+prune.pred_factor <- factor(prune.pred, levels = levels(test$sp))
+
+# Calculate the misclassification rate
+misclassification <- mean(prune.pred_factor != test$sp)
+
+return(misclassification)
+}
+mis_tree<-lapply(folds,misclass_tree)
+print(1-mean(as.numeric(mis_tree)))
+```
+
+The accuracy for sp-female is 0.7752934 compared with 0.8073291 in
+sp-male, the model for sp-male can do a better prediction.
+
+------------------------------------------------------------------------
+
+## 6.3. Multinomial logistic regression (Author: Maciej Pecak)
+
+Let's read the data first.
+
+```{r, echo=FALSE}
+mice.df <- read.csv("mice_filled_all_values.csv") %>%
+  mutate(
+    season = as.factor(season),
+    lifestage = as.factor(lifestage),
+    sex = as.factor(sex),
+    ecoregion1 = as.factor(ecoregion1)
+  )
+head(mice.df, 3)
+```
+
+For the purpose of better classification and consistency with other
+algorithms, only mice subspecies that have more than a hundred
+observations will be included.
+
+```{r}
+species.considered <- c(
+  "Peromyscus maniculatus Wagner, 1845", 
+  "Peromyscus maniculatus sonoriensis", 
+  "Peromyscus maniculatus bairdii", 
+  "Peromyscus maniculatus gambelii", 
+  "Peromyscus maniculatus artemisiae", 
+  "Peromyscus maniculatus rufinus", 
+  "Peromyscus maniculatus rubidus", 
+  "Peromyscus maniculatus nebrascensis", 
+  "Peromyscus maniculatus luteus"
+)
+
+model.df <- mice.df %>%
+  select(-c(X, X.1, long, lat, decade, month, year, ecoregion1_num, 
+            season_num, sex_num, sex_transformed, 
+            ecoregion1_transformed, season_transformed)) %>%
+  filter(sp %in% species.considered)
+```
+
+In order to ensure the correctness of the algorithm, the variables that
+are highly multicolinear need to be eliminated. Is was conducted
+manually by eliminating the correlated variables one by one, based on
+the highest value of the Variance Inflation Factor. The following subset
+contains values that are not colinear.
+
+```{r}
+vif(lm(body_mass ~ 
+         pop_density_4km2 + tail_length + HB.Length + 
+         TD + MAP + MSP + FFP + EXT, data = model.df))
+```
+
+The next step is to divide the data into train and test sets in 3:1
+proportion.
+
+```{r}
+set.seed(10)
+model.df <- model.df %>%
+  mutate(id = 1:nrow(model.df))
+
+model.train <- model.df %>% sample_frac(.75)
+model.test <- anti_join(model.df, model.train, by = "id")
+
+model.train <- dplyr::select(model.train, -id)
+model.test <- dplyr::select(model.test, -id)
+```
+
+Finally, the model that uses all non-correlated numerical variables as
+well as available categorical variables. Since different species cannot
+be ordered, the only reasonable approach is to use the baseline
+probability model.
+
+```{r, warning=FALSE}
+species.baseline.classifier <- vglm(
+  sp ~ pop_density_4km2 + tail_length + HB.Length + TD + MAP + MSP + FFP + EXT, 
+  family = multinomial, 
+  data = model.train
+)
+```
+
+A basic diagnostic to check whether the trained model is reasonable
+($\chi^2$-goodness of fit test)
+
+```{r}
+1-pchisq(
+  deviance(species.baseline.classifier),
+  df.residual(species.baseline.classifier)
+)
+```
+
+As shown above, the p-value for the goodness-of-fit test fails to reject
+the null hypothesis.\newline
+
+Finally, let's compute the correct classification rate (accuracy).
+
+```{r}
+predicted.vals <- predict(species.baseline.classifier, model.test, type="response")
+fitted.result<-colnames(predicted.vals)[rowMaxs(predicted.vals)]
+
+misClasificError <- mean(fitted.result != model.test$sp)
+print(paste('Accuracy:', 1 - misClasificError))
+```
+
+------------------------------------------------------------------------
+
+### Multinomial Logistic Regression - Cross Validation
+
+For the purpose of comparison between the other classification methods,
+the 10-fold cross validation needs to be conducted. As a performance
+measure, the cross validation error is defined as the misclassification
+rate.
+
+```{r}
+library("caret")
+set.seed(10)
+no.folds = 10
+folds <- createFolds(model.df$sp, k = no.folds)
+```
+
+For each fold, the model is trained on the remaining ones and the
+misclassification rate is computed on the currently selected fold.
+
+```{r, warning=FALSE}
+cv.errors <- numeric(no.folds)
+for(i in 1:no.folds) {
+  train <- model.df[-unlist(folds[i]), ]
+  test <- model.df[unlist(folds[i]), ]
+  
+  species.baseline.cv.classifier <- vglm(
+    sp ~ pop_density_4km2 + tail_length + HB.Length + TD + MAP + MSP + FFP + EXT, 
+    family = multinomial, 
+    data = train
+  )
+  
+  predicted.vals <- predict(species.baseline.cv.classifier, test, type="response")
+  fitted.result <- colnames(predicted.vals)[rowMaxs(predicted.vals)]
+  
+  cv.errors[i] <- mean(fitted.result != test$sp)
+}
+
+cv.errors
+```
+
+Final accuracy based on the cross validation.
+
+```{r}
+1 - mean(cv.errors)
+```
+
+------------------------------------------------------------------------
+
+## 6.4. Classification methods - comparison (Authors: Maciej Pecak, Hao Su)
+
+The following table summarizes explored classification methods for the
+deer mouse subspecies. 
+![](ss_class.png) 
+To sum up, the classification
+methods performed at comparable level. The LDA and QDA shouldn't be used
+for further prediction as the normality and homoscedasticity (for LDA)
+assumptions were not met. The best performance could be obtained with
+the decision tree.
+
+------------------------------------------------------------------------
+
+# Summary
+
+For this project we explored and practised techniques that were
+presented in the class:
+
+-   Practiced kNN algorithm by using it to fill missing data
+    (lifestage - categorical kNN, body mass - bootstrapping nearest
+    neighbors).
+-   Conducted analysis to deremine whether the 30 years time periods and
+    ecoregions should be treated as strata or clusters when estimating
+    body mass, tail length and head-body length. Compared the values of
+    SSB and SS and performed Kruskal-Wallis test since the
+    homoscedasticity assumption was not met for ANOVA. In both cases.
+-   Estimated population body mass and tail length using simple random
+    sampling and stratified sampling. Cluster sampling was rejected in
+    the previous analysis. In both cases, stratified sampling yielded
+    smaller standard error compared to SRS.
+-   Compared linear regression with regression tree for predicting body
+    mass and total length.
+-   Explored the impact of climate variables on body mass and total
+    length using linear regression and regression trees.
+-   Compared four different methods of classification: LDA, QDA,
+    Classification tree and Multinomial Logistic Regression to classify
+    deer mice subspecies.
+
+# References
+
+-   Guralnick, Robert, i in. „Body Size Trends in Response to Climate
+    and Urbanization in the Widespread North American Deer Mouse,
+    Peromyscus Maniculatus". Scientific Reports, t. 10, nr 1, June
+    2020, s. 8882. www.nature.com,
+    <https://doi.org/10.1038/s41598-020-65755-x>.
+
+-   Wang T, Hamann A, Spittlehouse D, Carroll C (2016) Locally
+    Downscaled and Spatially Customizable Climate Data for Historical
+    and Future Periods for North America. PLoS ONE 11(6): e0156720.
+    <doi:10.1371/journal.pone.0156720>
+
+-   Mahony CR, Wang T; Hamann A and Cannon AJ, 2022. A CMIP6 ensemble
+    for downscaled monthly climate normals over North America.
+    EarthArXiv. <https://doi.org/10.31223/X5CK6Z>
